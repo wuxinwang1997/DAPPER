@@ -13,7 +13,7 @@ from dapper.tools.progressbar import progbar
 from dapper.tools.randvars import GaussRV
 
 from . import da_method
-
+import time
 
 @da_method
 class ens_method:
@@ -38,7 +38,8 @@ class EnKF:
         # Init
         E = HMM.X0.sample(self.N)
         self.stats.assess(0, E=E)
-
+        self.da_time = time.time()
+        self.da_time = self.da_time - self.da_time
         # Cycle
         for k, ko, t, dt in progbar(HMM.tseq.ticker):
             E = HMM.Dyn(E, t-dt, dt)
@@ -47,10 +48,12 @@ class EnKF:
             # Analysis update
             if ko is not None:
                 self.stats.assess(k, ko, 'f', E=E)
+                start = time.time()
                 E = EnKF_analysis(E, HMM.Obs(E, t), HMM.Obs.noise, yy[ko],
                                   self.upd_a, self.stats, ko)
                 E = post_process(E, self.infl, self.rot)
-
+                end = time.time()
+                self.da_time += end - start
             self.stats.assess(k, ko, E=E)
 
 
@@ -623,7 +626,8 @@ class LETKF:
         E = HMM.X0.sample(self.N)
         self.stats.assess(0, E=E)
         self.stats.new_series("ad_inf", 1, HMM.tseq.Ko+1)
-
+        self.da_time = time.time()
+        self.da_time = self.da_time - self.da_time
         with multiproc.Pool(self.mp) as pool:
             for k, ko, t, dt in progbar(HMM.tseq.ticker):
                 E = HMM.Dyn(E, t-dt, dt)
@@ -631,12 +635,14 @@ class LETKF:
 
                 if ko is not None:
                     self.stats.assess(k, ko, 'f', E=E)
+                    start = time.time()
                     batch, taper = HMM.Obs.localizer(self.loc_rad, 'x2y', t, self.taper)
                     E, stats = local_analyses(E, HMM.Obs(E, t), HMM.Obs.noise.C, yy[ko],
                                               batch, taper, pool.map, self.xN, self.g)
                     self.stats.write(stats, k, ko, "a")
                     E = post_process(E, self.infl, self.rot)
-
+                    end = time.time()
+                    self.da_time += end - start 
                 self.stats.assess(k, ko, E=E)
 
 
@@ -861,10 +867,12 @@ class EnKF_N:
             # Forecast
             E = HMM.Dyn(E, t-dt, dt)
             E = add_noise(E, dt, HMM.Dyn.noise, self.fnoise_treatm)
-
+            self.da_time = time.time()
+            self.da_time = self.da_time - self.da_time
             # Analysis
             if ko is not None:
                 self.stats.assess(k, ko, 'f', E=E)
+                start = time.time()
                 Eo = HMM.Obs(E, t)
                 y  = yy[ko]
 
@@ -962,5 +970,6 @@ class EnKF_N:
 
                 self.stats.infl[ko] = l1
                 self.stats.trHK[ko] = (((l1*s)**2 + N1)**(-1.0)*s**2).sum()/HMM.Ny
-
+                end = time.time()
+                self.da_method += end - start
             self.stats.assess(k, ko, E=E)

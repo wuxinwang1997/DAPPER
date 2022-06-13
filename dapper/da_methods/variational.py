@@ -13,6 +13,7 @@ from dapper.tools.progressbar import progbar
 
 from . import da_method
 
+import time
 
 @da_method
 class var_method:
@@ -116,9 +117,11 @@ class iEnKS:
             for k, t, dt in HMM.tseq.cycle(ko=0):
                 self.stats.assess(k-1, None, 'u', E=E)
                 E = HMM.Dyn(E, t-dt, dt)
-
+        self.da_time = time.time()
+        self.da_time = self.da_time - self.da_time
         # Loop over DA windows (DAW).
         for ko in progbar(range(0, Ko+self.Lag+1)):
+            start = time.time()
             kLag = ko-self.Lag
             DAW  = range(max(0, kLag+1), min(ko, Ko) + 1)
 
@@ -138,7 +141,8 @@ class iEnKS:
                 for k, t, dt in HMM.tseq.cycle(kCycle):
                     self.stats.assess(k-1, None, 'u', E=E)
                     E = HMM.Dyn(E, t-dt, dt)
-
+            end = time.time()
+            self.da_time += end - start
         self.stats.assess(k, Ko, 'us', E=E)
 
 
@@ -304,9 +308,11 @@ class Var4D:
         # Init
         x = HMM.X0.mu
         self.stats.assess(0, mu=x, Cov=B)
-
+        self.da_time = time.time()
+        self.da_time = self.da_time - self.da_time
         # Loop over DA windows (DAW).
         for ko in progbar(np.arange(-1, Ko+self.Lag+1)):
+            start = time.time()
             kLag = ko-self.Lag
             DAW = range(max(0, kLag+1), min(ko, Ko) + 1)
 
@@ -371,5 +377,6 @@ class Var4D:
                     self.stats.assess(k-1, None, 'u', mu=x, Cov=Y@Y.T)
                     X = HMM.Dyn.linear(x, t-dt, dt) @ X
                     x = HMM.Dyn(x, t-dt, dt)
-
+            end = time.time()
+            self.da_method += end - start
         self.stats.assess(k, Ko, 'us', mu=x, Cov=X@Cow1@X.T)
