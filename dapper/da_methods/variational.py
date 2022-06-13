@@ -131,7 +131,10 @@ class iEnKS:
                                  EPS, yy[ko], (k, ko, t), Rm12,
                                  self.xN, self.MDA, (self.nIter, self.wtol))
                 E = post_process(E, self.infl, self.rot)
-
+            
+            end = time.time()
+            self.da_time += end - start 
+            
             # Slide/shift DAW by propagating smoothed ('s') ensemble from [kLag].
             if kLag >= 0:
                 self.stats.assess(HMM.tseq.kko[kLag], kLag, 's', E=E)
@@ -141,8 +144,7 @@ class iEnKS:
                 for k, t, dt in HMM.tseq.cycle(kCycle):
                     self.stats.assess(k-1, None, 'u', E=E)
                     E = HMM.Dyn(E, t-dt, dt)
-            end = time.time()
-            self.da_time += end - start
+            
         self.stats.assess(k, Ko, 'us', E=E)
 
 
@@ -315,10 +317,9 @@ class Var4D:
             start = time.time()
             kLag = ko-self.Lag
             DAW = range(max(0, kLag+1), min(ko, Ko) + 1)
-
+            
             # Assimilation (if ∃ "not-fully-assimlated" Obs).
             if 0 <= ko <= Ko:
-
                 # Init iterations.
                 w   = np.zeros(Nx)  # Control vector for the mean state.
                 x0  = x.copy()      # Increment reference.
@@ -367,7 +368,8 @@ class Var4D:
                 # Final (smoothed) estimate at [kLag].
                 x = x0 + B12@w
                 X = B12
-
+            end = time.time()
+            self.da_method += end - start
             # Slide/shift DAW by propagating smoothed ('s') state from [kLag].
             if -1 <= kLag < Ko:
                 if kLag >= 0:
@@ -377,6 +379,5 @@ class Var4D:
                     self.stats.assess(k-1, None, 'u', mu=x, Cov=Y@Y.T)
                     X = HMM.Dyn.linear(x, t-dt, dt) @ X
                     x = HMM.Dyn(x, t-dt, dt)
-            end = time.time()
-            self.da_method += end - start
+            
         self.stats.assess(k, Ko, 'us', mu=x, Cov=X@Cow1@X.T)
