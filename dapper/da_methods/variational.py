@@ -117,11 +117,11 @@ class iEnKS:
             for k, t, dt in HMM.tseq.cycle(ko=0):
                 self.stats.assess(k-1, None, 'u', E=E)
                 E = HMM.Dyn(E, t-dt, dt)
-        self.da_time = time.time()
-        self.da_time = self.da_time - self.da_time
+        # self.da_time = time.time()
+        # self.da_time = self.da_time - self.da_time
         # Loop over DA windows (DAW).
         for ko in progbar(range(0, Ko+self.Lag+1)):
-            start = time.time()
+            # start = time.time()
             kLag = ko-self.Lag
             DAW  = range(max(0, kLag+1), min(ko, Ko) + 1)
 
@@ -132,8 +132,8 @@ class iEnKS:
                                  self.xN, self.MDA, (self.nIter, self.wtol))
                 E = post_process(E, self.infl, self.rot)
             
-            end = time.time()
-            self.da_time += end - start 
+            # end = time.time()
+            # self.da_time += end - start 
             
             # Slide/shift DAW by propagating smoothed ('s') ensemble from [kLag].
             if kLag >= 0:
@@ -267,7 +267,6 @@ def iEnKS_update(upd_a, E, DAW, HMM, stats, EPS, y, time, Rm12, xN, MDA, thresho
 
     return E
 
-
 @var_method
 class Var4D:
     """4D-Var.
@@ -290,7 +289,7 @@ class Var4D:
 
     def assimilate(self, HMM, xx, yy):
         R, Ko = HMM.Obs.noise.C, HMM.tseq.Ko
-        Rm12 = R.sym_sqrt_inv
+        Rm12 = np.float64(R.sym_sqrt_inv)
         Nx = HMM.Dyn.M
 
         # Set background covariance. Note that it is static (compare to iEnKS).
@@ -305,16 +304,14 @@ class Var4D:
         else:
             raise ValueError("Bad input B.")
         B *= self.xB
-        B12 = CovMat(B).sym_sqrt
+        B12 = np.float64(CovMat(B).sym_sqrt)
 
         # Init
         x = HMM.X0.mu
         self.stats.assess(0, mu=x, Cov=B)
-        self.da_time = time.time()
-        self.da_time = self.da_time - self.da_time
         # Loop over DA windows (DAW).
         for ko in progbar(np.arange(-1, Ko+self.Lag+1)):
-            start = time.time()
+            # start = time.time()
             kLag = ko-self.Lag
             DAW = range(max(0, kLag+1), min(ko, Ko) + 1)
             
@@ -326,12 +323,12 @@ class Var4D:
 
                 for iteration in np.arange(self.nIter):
                     # Reconstruct smoothed state.
-                    x = x0 + B12@w
+                    x = x0 + np.float64(B12@w)
                     X = B12  # Aggregate composite TLMs onto B12
                     # Forecast.
                     for kCycle in DAW:
                         for k, t, dt in HMM.tseq.cycle(kCycle):  # noqa
-                            X = HMM.Dyn.linear(x, t-dt, dt) @ X
+                            X = np.float64(HMM.Dyn.linear(x, t-dt, dt)) @ X
                             x = HMM.Dyn(x, t-dt, dt)
 
                     # Assess forecast self.stats
@@ -339,45 +336,43 @@ class Var4D:
                         self.stats.assess(k, ko, 'f', mu=x, Cov=X@X.T)
 
                     # Observe.
-                    Y  = HMM.Obs.linear(x, t) @ X
+                    Y  = np.float64(HMM.Obs.linear(x, t) @ X)
                     xo = HMM.Obs(x, t)
 
                     # Analysis prep.
                     y      = yy[ko]          # Get current HMM.Obs.
-                    dy     = Rm12 @ (y - xo)   # Transform HMM.Obs space.
-                    Y      = Rm12 @ Y          # Transform HMM.Obs space.
+                    dy     = np.float64(Rm12 @ (y - xo))   # Transform HMM.Obs space.
+                    Y      = np.float64(Rm12 @ Y)          # Transform HMM.Obs space.
                     V, s, UT = svd0(Y.T)       # Decomp for lin-alg update comps.
 
                     # Post. cov (approx) of w,
                     # estimated at current iteration, raised to power.
-                    Cow1 = (V * (pad0(s**2, Nx) + 1)**-1.0) @ V.T
+                    Cow1 = np.float64((V * (pad0(s**2, Nx) + 1)**-1.0) @ V.T)
 
                     # Compute analysis update.
-                    grad = Y.T@dy - w          # Cost function gradient
-                    dw   = Cow1@grad           # Gauss-Newton step
+                    grad = np.float64(Y.T@dy - w)          # Cost function gradient
+                    dw   = np.float64(Cow1@grad)           # Gauss-Newton step
                     w   += dw                  # Step
 
                     if dw@dw < self.wtol*Nx:
                         break
 
                 # Assess (analysis) self.stats.
-                final_increment = X@dw
-                self.stats.assess(k, ko, 'a', mu=x+final_increment, Cov=X@Cow1@X.T)
+                final_increment = np.float64(X@dw)
+                self.stats.assess(k, ko, 'a', mu=x+final_increment, Cov=np.float64(X@Cow1@X.T))
                 self.stats.iters[ko] = iteration+1
 
                 # Final (smoothed) estimate at [kLag].
-                x = x0 + B12@w
+                x = x0 + np.float64(B12@w)
                 X = B12
-            end = time.time()
-            self.da_method += end - start
             # Slide/shift DAW by propagating smoothed ('s') state from [kLag].
             if -1 <= kLag < Ko:
                 if kLag >= 0:
                     self.stats.assess(HMM.tseq.kko[kLag], kLag, 's',
-                                      mu=x, Cov=X@Cow1@X.T)
+                                      mu=x, Cov=np.float64(X@Cow1@X.T))
                 for k, t, dt in HMM.tseq.cycle(kLag+1):
-                    self.stats.assess(k-1, None, 'u', mu=x, Cov=Y@Y.T)
-                    X = HMM.Dyn.linear(x, t-dt, dt) @ X
+                    self.stats.assess(k-1, None, 'u', mu=x, Cov=np.float64(Y@Y.T))
+                    X = np.float64(HMM.Dyn.linear(x, t-dt, dt)) @ X
                     x = HMM.Dyn(x, t-dt, dt)
             
         self.stats.assess(k, Ko, 'us', mu=x, Cov=X@Cow1@X.T)
